@@ -1,0 +1,42 @@
+name: Sistema de Aerolinea 2.0
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Compilar y ejecutar pruebas JDO con H2
+        run: mvn -B clean verify
+      - name: Iniciar el JAR
+        run: |
+          java -jar target/SistemaDeAerolinea2.0.jar --ayuda
+          printf '0\n' | java -jar target/SistemaDeAerolinea2.0.jar --consola
+      - name: Preparar distribucion
+        run: |
+          mkdir -p dist/lib
+          cp target/SistemaDeAerolinea2.0.jar dist/
+          cp target/lib/*.jar dist/lib/
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          with ZipFile('SistemaDeAerolinea2.0.zip', 'w', ZIP_DEFLATED) as z:
+              for p in sorted(Path('.').rglob('*')):
+                  if not p.is_file() or p.name == 'SistemaDeAerolinea2.0.zip': continue
+                  if p.parts[0] in ('target', 'data', '.git'): continue
+                  z.write(p, Path('SistemaDeAerolinea2.0') / p)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: SistemaDeAerolinea2.0
+          path: |
+            SistemaDeAerolinea2.0.zip
+            target/surefire-reports/
